@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TEDDRIVE | Manager</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="assets/css/responsive.css">
+</head>
+<body>
+    <div class="sidebar">
+        <div class="brand">TEDDRIVE</div>
+        <div class="nav-section">
+            <div class="nav-item active" onclick="switchView('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> Dashboard</div>
+            <div class="nav-item" onclick="switchView('all', this)"><i class="fa-solid fa-folder"></i> My Files</div>
+            <div class="nav-item" onclick="switchView('recent', this)"><i class="fa-solid fa-clock"></i> Recent</div>
+        </div>
+        <div class="nav-section" style="border-bottom: none;">
+            <div class="label-title">Storage</div>
+            <div class="storage-bar-container">
+                <div class="storage-info-text"><span>Used Space</span><span id="usedSpaceText">0 MB</span></div>
+                <div class="progress-bar-mini"><div class="progress-fill-mini" id="usedSpaceBar"></div></div>
+            </div>
+            <div class="nav-item" onclick="switchView('video', this)"><i class="fa-solid fa-video"></i> Videos</div>
+            <div class="nav-item" onclick="switchView('image', this)"><i class="fa-solid fa-image"></i> Images</div>
+            <div class="nav-item" onclick="switchView('audio', this)"><i class="fa-solid fa-music"></i> Audio</div>
+            <div class="nav-item" onclick="switchView('other', this)"><i class="fa-solid fa-file"></i> Other</div>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="top-bar">
+            <div class="title-section">
+                <h2 id="pageTitle">Dashboard</h2>
+                <div class="breadcrumb-path" id="breadcrumbPath" style="display: none;">
+                    <span class="path-item" onclick="navigateToRoot()">
+                        <i class="fa-solid fa-home"></i> Home
+                    </span>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn-action btn-upload" onclick="forceRefresh()"><i class="fa-solid fa-refresh"></i> Refresh</button>
+                <button class="btn-action btn-upload" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> New Folder</button>
+                <button class="btn-action btn-upload" onclick="openUploadModal()"><i class="fa-solid fa-plus"></i> Upload</button>
+            </div>
+        </div>
+        <div class="grid" id="fileGrid"></div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div class="modal-overlay" id="uploadModal">
+        <div class="modal">
+            <h3>Upload File</h3>
+            <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                <p style="color:var(--text-muted)">Click to select file</p>
+            </div>
+            <input type="file" id="fileInput" style="display:none" onchange="handleFileSelect()">
+            <p id="fileName" style="margin-bottom:15px; color:var(--accent); font-size:0.9rem;"></p>
+            
+            <label style="font-size:0.8rem; color:var(--text-muted);">Provider</label>
+            <select id="provider">
+                <option value="discord">Discord</option>
+                <option value="telegram">Telegram</option>
+            </select>
+            
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button onclick="closeModal('uploadModal')" style="padding:8px 15px; background:#333; color:white; border:none; border-radius:6px; cursor:pointer;">Cancel</button>
+                <button onclick="startRealUpload()" style="padding:8px 15px; background:var(--primary); color:white; border:none; border-radius:6px; cursor:pointer;">Upload</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Modal -->
+    <div class="modal-overlay" id="progressModal">
+        <div class="modal">
+            <h3 id="progressTitle">Processing...</h3>
+            <p id="progressText" style="color:var(--text-muted); margin-bottom:10px;">Please wait...</p>
+            <div class="progress-bar"><div class="progress-fill" id="progressBar"></div></div>
+            <p style="margin-top:15px; font-size:0.8rem; color:#fbbf24;">Do not close this tab.</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="assets/js/main.js"></script>
+</body>
+</html>

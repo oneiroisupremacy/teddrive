@@ -1,0 +1,62 @@
+{
+  "builds": [
+    {
+      "src": "api/upload/index.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "api/discord/index.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "api/telegram/index.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "api/download/index.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "api/config/index.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "api/debug/index.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "public/**/*",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/upload",
+      "dest": "/api/upload/index.go"
+    },
+    {
+      "src": "/api/discord",
+      "dest": "/api/discord/index.go"
+    },
+    {
+      "src": "/api/telegram",
+      "dest": "/api/telegram/index.go"
+    },
+    {
+      "src": "/api/download",
+      "dest": "/api/download/index.go"
+    },
+    {
+      "src": "/api/config",
+      "dest": "/api/config/index.go"
+    },
+    {
+      "src": "/api/debug",
+      "dest": "/api/debug/index.go"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/public/$1"
+    }
+  ]
+}

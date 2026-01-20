@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TEDDRIVE | Shared File</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="assets/css/shared.css">
+    <link rel="stylesheet" href="assets/css/responsive.css">
+    <style>
+        .share-container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 30px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+        
+        @media (max-width: 768px) {
+            .share-container {
+                margin: 20px;
+                padding: 20px;
+                max-width: none;
+            }
+        }
+        
+        .share-header {
+            margin-bottom: 30px;
+        }
+        
+        @media (max-width: 768px) {
+            .share-header {
+                margin-bottom: 20px;
+            }
+        }
+        
+        .share-header h1 {
+            color: var(--primary);
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+            .share-header h1 {
+                font-size: 1.5rem;
+            }
+        }
+        
+        .file-preview {
+            background: var(--bg-dark);
+            border-radius: 12px;
+            padding: 40px;
+            margin: 30px 0;
+            border: 1px solid var(--border);
+        }
+        
+        @media (max-width: 768px) {
+            .file-preview {
+                padding: 25px 15px;
+                margin: 20px 0;
+            }
+        }
+        
+        .file-icon {
+            font-size: 4rem;
+            color: var(--primary);
+            margin-bottom: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .file-icon {
+                font-size: 3rem;
+                margin-bottom: 15px;
+            }
+        }
+        
+        .file-name {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--text-main);
+            word-break: break-word;
+        }
+        
+        @media (max-width: 768px) {
+            .file-name {
+                font-size: 1.2rem;
+            }
+        }
+        
+        .file-meta {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        
+        .download-btn {
+            background: linear-gradient(135deg, var(--primary), #6366f1);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: 0.2s;
+            margin-top: 20px;
+            min-height: 50px;
+        }
+        
+        @media (max-width: 768px) {
+            .download-btn {
+                width: 100%;
+                justify-content: center;
+                padding: 15px 20px;
+                font-size: 1rem;
+                min-height: 48px;
+            }
+        }
+        
+        .download-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+        
+        .error-message {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        @media (max-width: 768px) {
+            .error-message {
+                padding: 15px;
+                font-size: 0.9rem;
+            }
+        }
+        
+        .loading {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+        
+        @media (max-width: 768px) {
+            .loading {
+                font-size: 1rem;
+            }
+        }
+        
+        .footer-info {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+        
+        @media (max-width: 768px) {
+            .footer-info {
+                margin-top: 20px;
+                padding-top: 15px;
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body style="background: var(--bg-dark); color: var(--text-main); font-family: 'Inter', sans-serif;">
+    <div class="share-container">
+        <div class="share-header">
+            <h1><i class="fa-solid fa-share"></i> TEDDRIVE</h1>
+            <p style="color: var(--text-muted);">Shared File Download</p>
+        </div>
+        
+        <div id="content">
+            <div class="loading">
+                <i class="fa-solid fa-spinner fa-spin"></i> Loading file information...
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Modal -->
+    <div class="modal-overlay" id="progressModal">
+        <div class="modal">
+            <h3 id="progressTitle">Downloading...</h3>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBar"></div>
+            </div>
+            <p id="progressText" style="margin-top: 10px; color: var(--text-muted);">Preparing download...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="assets/js/share.js"></script>
+</body>
+</html>

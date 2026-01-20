@@ -1,0 +1,42 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+ois-cli
+ois-discord
+ois-telegram
+
+# Test binary, built with `go test -c`
+*.test
+
+# Dependency directories
+vendor/
+
+# Vercel deployment files
+.vercel/
+
+# Environment files (CONTAINS SENSITIVE TOKENS!)
+.env
+.env.local
+.env*.local
+.env.production
+.env.development
+# Keep .env.example for template
+
+# Temporary and test files
+test_*.html
+*.tmp
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+.vercel
