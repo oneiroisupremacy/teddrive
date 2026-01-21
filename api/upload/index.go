@@ -1,20 +1,8 @@
 package handler
 
 import (
-    "bytes"
-    "crypto/aes"
-    "crypto/cipher"
-    "crypto/rand"
-    "encoding/base64"
-    "encoding/json"
     "fmt"
-    "io"
-    "mime/multipart"
     "net/http"
-    "os"
-    "regexp"
-    "strings"
-    "time"
 )
 
 type UploadResponse struct {

@@ -62,12 +62,30 @@ async function initSupabase() {
 
 async function createTablesIfNeeded() {
     try {
-        const { data: testFiles } = await supabaseClient.from('files').select('id').limit(1);
-        const { data: testFolders } = await supabaseClient.from('folders').select('id').limit(1);
-        console.log('Supabase tables already exist');
-    } catch (error) {
-        console.log('Creating Supabase tables...');
-        alert(`Supabase tables need to be created. Please run this SQL in your Supabase SQL Editor:
+        console.log('[DEBUG] Testing Supabase connection...');
+        console.log('[DEBUG] Supabase URL:', supabaseClient.supabaseUrl);
+        console.log('[DEBUG] Anon Key (first 20 chars):', supabaseClient.supabaseKey.substring(0, 20) + '...');
+        
+        const { data: testFiles, error: filesError } = await supabaseClient.from('files').select('id').limit(1);
+        const { data: testFolders, error: foldersError } = await supabaseClient.from('folders').select('id').limit(1);
+        
+        if (filesError) {
+            console.error('[DEBUG] Files table error:', filesError);
+            console.error('[DEBUG] Error code:', filesError.code);
+            console.error('[DEBUG] Error message:', filesError.message);
+            console.error('[DEBUG] Error details:', filesError.details);
+        }
+        if (foldersError) {
+            console.error('[DEBUG] Folders table error:', foldersError);
+            console.error('[DEBUG] Error code:', foldersError.code);
+            console.error('[DEBUG] Error message:', foldersError.message);
+            console.error('[DEBUG] Error details:', foldersError.details);
+        }
+        
+        if (filesError && filesError.code === '42P01') {
+            // Table doesn't exist
+            console.log('Creating Supabase tables...');
+            alert(`Supabase tables need to be created. Please run this SQL in your Supabase SQL Editor:
 
 CREATE TABLE IF NOT EXISTS folders (
     id VARCHAR(50) PRIMARY KEY,
@@ -95,10 +113,29 @@ CREATE TABLE IF NOT EXISTS files (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- IMPORTANT: Disable RLS and grant permissions
 ALTER TABLE public.files DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.folders DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON public.files TO anon, authenticated;
 GRANT ALL ON public.folders TO anon, authenticated;`);
+            useDatabase = false;
+            return;
+        }
+        
+        if (filesError && filesError.code === 'PGRST116') {
+            // Authentication error
+            console.error('[ERROR] Supabase authentication failed. Check your SUPABASE_ANON_KEY');
+            alert('Supabase authentication failed. Please check your SUPABASE_ANON_KEY in environment variables.');
+            useDatabase = false;
+            return;
+        }
+        
+        console.log('Supabase tables already exist');
+    } catch (error) {
+        console.error('[ERROR] Supabase connection failed:', error);
+        useDatabase = false;
+    }
+}
         useDatabase = false;
     }
 }
@@ -186,6 +223,9 @@ async function loadFilesFromDB() {
     
     if (error) {
         console.error('[DB] Query error:', error);
+        console.error('[DB] Error code:', error.code);
+        console.error('[DB] Error message:', error.message);
+        console.error('[DB] Error details:', error.details);
         throw error;
     }
     
@@ -231,6 +271,9 @@ async function loadFoldersFromDB() {
     
     if (error) {
         console.error('[DB] Folders query error:', error);
+        console.error('[DB] Error code:', error.code);
+        console.error('[DB] Error message:', error.message);
+        console.error('[DB] Error details:', error.details);
         throw error;
     }
     
