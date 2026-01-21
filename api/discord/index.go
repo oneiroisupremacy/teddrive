@@ -44,9 +44,14 @@ func Handler(w http.ResponseWriter, r *http.Request) {
     token := strings.TrimSpace(os.Getenv("DISCORD_BOT_TOKEN"))
     channelID := strings.TrimSpace(os.Getenv("DISCORD_CHANNEL_ID"))
     
+    fmt.Printf("[DEBUG] Token length: %d\n", len(token))
+    fmt.Printf("[DEBUG] Channel ID: %s\n", channelID)
+    
     if token == "" || channelID == "" {
         fmt.Println("[ERROR] Discord credentials missing")
-        http.Error(w, "Discord not configured", http.StatusServiceUnavailable)
+        fmt.Printf("[ERROR] DISCORD_BOT_TOKEN: '%s' (len=%d)\n", token, len(token))
+        fmt.Printf("[ERROR] DISCORD_CHANNEL_ID: '%s' (len=%d)\n", channelID, len(channelID))
+        http.Error(w, "Discord not configured - missing environment variables", http.StatusServiceUnavailable)
         return
     }
 
@@ -174,24 +179,38 @@ func uploadToDiscord(fileName string, data []byte, token, channelID string) (str
     req.Header.Set("Authorization", "Bot "+token)
     req.Header.Set("Content-Type", writer.FormDataContentType())
 
-    // Make request with short timeout
-    client := &http.Client{Timeout: 20 * time.Second}
+    // Make request with longer timeout for large files
+    client := &http.Client{Timeout: 60 * time.Second}
     resp, err := client.Do(req)
     if err != nil {
-        return "", err
+        return "", fmt.Errorf("HTTP request failed: %v", err)
     }
     defer resp.Body.Close()
 
+    respBody, _ := io.ReadAll(resp.Body)
+    fmt.Printf("[DISCORD] Response Status: %d\n", resp.StatusCode)
+    fmt.Printf("[DISCORD] Response Body: %s\n", string(respBody))
+
+    if resp.StatusCode == 401 {
+        return "", fmt.Errorf("Discord bot token invalid or expired. Please check DISCORD_BOT_TOKEN")
+    }
+    
+    if resp.StatusCode == 403 {
+        return "", fmt.Errorf("Discord bot lacks permissions. Check bot permissions in channel %s", channelID)
+    }
+    
+    if resp.StatusCode == 429 {
+        return "", fmt.Errorf("Discord rate limit exceeded. Please wait and try again")
+    }
+
     if resp.StatusCode != 200 {
-        respBody, _ := io.ReadAll(resp.Body)
-        fmt.Printf("[DISCORD] API Error %d: %s\n", resp.StatusCode, string(respBody))
         return "", fmt.Errorf("Discord API error %d: %s", resp.StatusCode, string(respBody))
     }
 
     // Parse response
     var result map[string]interface{}
-    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-        return "", err
+    if err := json.Unmarshal(respBody, &result); err != nil {
+        return "", fmt.Errorf("Failed to parse Discord response: %v", err)
     }
 
     // Get attachment URL
@@ -203,5 +222,5 @@ func uploadToDiscord(fileName string, data []byte, token, channelID string) (str
         }
     }
 
-    return "", fmt.Errorf("No attachment URL in response")
+    return "", fmt.Errorf("No attachment URL in Discord response")
 }

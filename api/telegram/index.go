@@ -44,9 +44,14 @@ func Handler(w http.ResponseWriter, r *http.Request) {
     token := strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN"))
     chatID := strings.TrimSpace(os.Getenv("TELEGRAM_CHAT_ID"))
     
+    fmt.Printf("[DEBUG] Token length: %d\n", len(token))
+    fmt.Printf("[DEBUG] Chat ID: %s\n", chatID)
+    
     if token == "" || chatID == "" {
         fmt.Println("[ERROR] Telegram credentials missing")
-        http.Error(w, "Telegram not configured", http.StatusServiceUnavailable)
+        fmt.Printf("[ERROR] TELEGRAM_BOT_TOKEN: '%s' (len=%d)\n", token, len(token))
+        fmt.Printf("[ERROR] TELEGRAM_CHAT_ID: '%s' (len=%d)\n", chatID, len(chatID))
+        http.Error(w, "Telegram not configured - missing environment variables", http.StatusServiceUnavailable)
         return
     }
 
@@ -177,23 +182,37 @@ func uploadToTelegram(fileName string, data []byte, token, chatID string) (strin
     req.Header.Set("Content-Type", writer.FormDataContentType())
 
     // Make request with longer timeout for Telegram (supports larger files)
-    client := &http.Client{Timeout: 60 * time.Second}
+    client := &http.Client{Timeout: 120 * time.Second}
     resp, err := client.Do(req)
     if err != nil {
-        return "", err
+        return "", fmt.Errorf("HTTP request failed: %v", err)
     }
     defer resp.Body.Close()
 
+    respBody, _ := io.ReadAll(resp.Body)
+    fmt.Printf("[TELEGRAM] Response Status: %d\n", resp.StatusCode)
+    fmt.Printf("[TELEGRAM] Response Body: %s\n", string(respBody))
+
+    if resp.StatusCode == 401 {
+        return "", fmt.Errorf("Telegram bot token invalid or expired. Please check TELEGRAM_BOT_TOKEN")
+    }
+    
+    if resp.StatusCode == 403 {
+        return "", fmt.Errorf("Telegram bot lacks permissions or chat not found. Check TELEGRAM_CHAT_ID")
+    }
+    
+    if resp.StatusCode == 429 {
+        return "", fmt.Errorf("Telegram rate limit exceeded. Please wait and try again")
+    }
+
     if resp.StatusCode != 200 {
-        respBody, _ := io.ReadAll(resp.Body)
-        fmt.Printf("[TELEGRAM] API Error %d: %s\n", resp.StatusCode, string(respBody))
         return "", fmt.Errorf("Telegram API error %d: %s", resp.StatusCode, string(respBody))
     }
 
     // Parse response
     var result map[string]interface{}
-    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-        return "", err
+    if err := json.Unmarshal(respBody, &result); err != nil {
+        return "", fmt.Errorf("Failed to parse Telegram response: %v", err)
     }
 
     // Check if ok
@@ -214,5 +233,5 @@ func uploadToTelegram(fileName string, data []byte, token, chatID string) (strin
         }
     }
 
-    return "", fmt.Errorf("No file_id in response")
+    return "", fmt.Errorf("No file_id in Telegram response")
 }

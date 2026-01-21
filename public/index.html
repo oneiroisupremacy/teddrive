@@ -4,17 +4,49 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TEDDRIVE | Manager</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="logo.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="logo.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="logo.png">
+    <meta name="theme-color" content="#8b5cf6">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/main.css">
     <link rel="stylesheet" href="assets/css/responsive.css">
 </head>
 <body>
-    <div class="sidebar">
-        <div class="brand">TEDDRIVE</div>
+    <!-- Mobile Header (Hidden on Desktop) -->
+    <div class="mobile-header">
+        <button class="hamburger-btn" onclick="toggleSidebar()">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        <div class="mobile-brand">
+            <i class="fa-solid fa-cloud" style="margin-right: 8px; color: #8b5cf6;"></i>
+            TEDDRIVE
+        </div>
+        <div class="mobile-actions">
+            <button class="mobile-action-btn" onclick="openUploadModal()">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Sidebar Overlay (Mobile Only) -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="brand">
+            <i class="fa-solid fa-cloud" style="margin-right: 8px; color: #8b5cf6;"></i>
+            TEDDRIVE
+        </div>
         <div class="nav-section">
             <div class="nav-item active" onclick="switchView('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> Dashboard</div>
             <div class="nav-item" onclick="switchView('all', this)"><i class="fa-solid fa-folder"></i> My Files</div>
             <div class="nav-item" onclick="switchView('recent', this)"><i class="fa-solid fa-clock"></i> Recent</div>
+            <div class="nav-item" onclick="switchView('video', this)"><i class="fa-solid fa-video"></i> Videos</div>
+            <div class="nav-item" onclick="switchView('image', this)"><i class="fa-solid fa-image"></i> Images</div>
+            <div class="nav-item" onclick="switchView('audio', this)"><i class="fa-solid fa-music"></i> Audio</div>
+            <div class="nav-item" onclick="switchView('other', this)"><i class="fa-solid fa-file"></i> Other</div>
         </div>
         <div class="nav-section" style="border-bottom: none;">
             <div class="label-title">Storage</div>
@@ -22,10 +54,6 @@
                 <div class="storage-info-text"><span>Used Space</span><span id="usedSpaceText">0 MB</span></div>
                 <div class="progress-bar-mini"><div class="progress-fill-mini" id="usedSpaceBar"></div></div>
             </div>
-            <div class="nav-item" onclick="switchView('video', this)"><i class="fa-solid fa-video"></i> Videos</div>
-            <div class="nav-item" onclick="switchView('image', this)"><i class="fa-solid fa-image"></i> Images</div>
-            <div class="nav-item" onclick="switchView('audio', this)"><i class="fa-solid fa-music"></i> Audio</div>
-            <div class="nav-item" onclick="switchView('other', this)"><i class="fa-solid fa-file"></i> Other</div>
         </div>
     </div>
 
@@ -40,9 +68,9 @@
                 </div>
             </div>
             <div style="display:flex; gap:10px;">
-                <button class="btn-action btn-upload" onclick="forceRefresh()"><i class="fa-solid fa-refresh"></i> Refresh</button>
-                <button class="btn-action btn-upload" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i> New Folder</button>
-                <button class="btn-action btn-upload" onclick="openUploadModal()"><i class="fa-solid fa-plus"></i> Upload</button>
+                <button class="btn-action btn-upload" onclick="forceRefresh()"><i class="fa-solid fa-refresh"></i><span> Refresh</span></button>
+                <button class="btn-action btn-upload" onclick="createNewFolder()"><i class="fa-solid fa-folder-plus"></i><span> New Folder</span></button>
+                <button class="btn-action btn-upload" onclick="openUploadModal()"><i class="fa-solid fa-plus"></i><span> Upload</span></button>
             </div>
         </div>
         <div class="grid" id="fileGrid"></div>

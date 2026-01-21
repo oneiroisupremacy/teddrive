@@ -291,32 +291,6 @@ async function loadFoldersFromDB() {
 }
 
 // === VIEW SWITCHING ===
-function switchView(filterType, element) {
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    if (element) element.classList.add('active');
-
-    currentFilter = filterType;
-    
-    if (filterType === 'dashboard' || filterType === 'recent' || filterType === 'video' || filterType === 'image' || filterType === 'audio' || filterType === 'other') {
-        currentFolder = null;
-    } else if (filterType !== currentFilter) {
-        currentFolder = null;
-    }
-    
-    if (filterType === 'dashboard') {
-        document.getElementById('pageTitle').innerText = 'Dashboard';
-        loadData().then(() => renderDashboard());
-    } else if (filterType === 'recent') {
-        document.getElementById('pageTitle').innerText = 'Recent Files';
-        loadData().then(() => renderRecentFiles());
-    } else {
-        const titles = { 'all': 'My Files', 'video': 'Videos', 'image': 'Images', 'audio': 'Audio', 'other': 'Other' };
-        document.getElementById('pageTitle').innerText = titles[filterType] || 'My Files';
-        loadData().then(() => renderGrid());
-    }
-    
-    // Remove the setTimeout - breadcrumb is now updated in loadData()
-}
 
 // === RENDERING ===
 function renderGrid() {
@@ -728,26 +702,65 @@ async function startRealUpload() {
             formData.append('keyBase64', keyBase64);
             formData.append('fileName', selectedFile.name);
 
-            const endpoint = provider === 'telegram' ? '/api/telegram' : '/api/discord';
+            let endpoint = provider === 'telegram' ? '/api/telegram' : '/api/discord';
+            let success = false;
+            let lastError = null;
 
-            const res = await fetch(endpoint, {
-                method: 'POST',
-                body: formData
-            });
-            
-            if(!res.ok) {
-                const errText = await res.text();
-                console.error(`[UPLOAD] Chunk ${i+1} failed:`, errText);
-                throw new Error(`Chunk ${i+1} failed: ${errText}`);
+            // Try primary provider first
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    links.push(data.link);
+                    success = true;
+                    console.log(`[UPLOAD] Chunk ${i+1} uploaded successfully via ${provider}`);
+                } else {
+                    const errText = await res.text();
+                    lastError = errText;
+                    console.error(`[UPLOAD] ${provider} failed:`, errText);
+                }
+            } catch (error) {
+                lastError = error.message;
+                console.error(`[UPLOAD] ${provider} request failed:`, error);
+            }
+
+            // If primary provider fails, try the other one
+            if (!success) {
+                const fallbackProvider = provider === 'discord' ? 'telegram' : 'discord';
+                const fallbackEndpoint = fallbackProvider === 'telegram' ? '/api/telegram' : '/api/discord';
+                
+                console.log(`[UPLOAD] Trying fallback provider: ${fallbackProvider}`);
+                
+                try {
+                    const res = await fetch(fallbackEndpoint, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (res.ok) {
+                        const data = await res.json();
+                        links.push(data.link);
+                        success = true;
+                        console.log(`[UPLOAD] Chunk ${i+1} uploaded successfully via ${fallbackProvider} (fallback)`);
+                    } else {
+                        const errText = await res.text();
+                        console.error(`[UPLOAD] Fallback ${fallbackProvider} also failed:`, errText);
+                    }
+                } catch (error) {
+                    console.error(`[UPLOAD] Fallback ${fallbackProvider} request failed:`, error);
+                }
+            }
+
+            if (!success) {
+                throw new Error(`Chunk ${i+1} failed on both providers. Last error: ${lastError}`);
             }
             
-            const data = await res.json();
-            links.push(data.link);
-            
-            console.log(`[UPLOAD] Chunk ${i+1} uploaded successfully`);
-            
             if (i < total - 1) {
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise(resolve => setTimeout(resolve, 500)); // Longer delay to avoid rate limits
             }
         }
         
@@ -783,8 +796,19 @@ async function startRealUpload() {
         
     } catch(e) { 
         closeModal('progressModal'); 
-        alert("Upload gagal: " + e.message); 
-        console.error('Upload error:', e);
+        
+        // Show more helpful error messages
+        let errorMsg = e.message;
+        if (errorMsg.includes('bot token invalid')) {
+            errorMsg = "Bot token expired. Please contact admin to update Discord/Telegram tokens.";
+        } else if (errorMsg.includes('lacks permissions')) {
+            errorMsg = "Bot lacks permissions. Please contact admin to check bot permissions.";
+        } else if (errorMsg.includes('rate limit')) {
+            errorMsg = "Rate limit exceeded. Please wait a few minutes and try again.";
+        }
+        
+        alert("Upload gagal: " + errorMsg); 
+        console.error('[UPLOAD] Error:', e);
     }
 }
 
@@ -813,7 +837,8 @@ async function downloadFile(id) {
             document.getElementById('progressBar').style.width = pct + "%";
             document.getElementById('progressText').innerText = `Downloading: ${pct}%`;
             
-            const proxyRes = await fetch('/api/download', {
+            // First, check if file needs chunked download
+            const checkRes = await fetch('/api/download', {
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ 
@@ -822,28 +847,95 @@ async function downloadFile(id) {
                 })
             });
             
-            if(!proxyRes.ok) {
-                const errText = await proxyRes.text();
-                throw new Error(`Chunk ${i+1} Gagal: ${errText}`);
+            if(!checkRes.ok) {
+                const errText = await checkRes.text();
+                throw new Error(`Chunk ${i+1} check failed: ${errText}`);
             }
             
-            const encryptedData = await proxyRes.arrayBuffer();
-            const encryptedArray = new Uint8Array(encryptedData);
+            const contentType = checkRes.headers.get('content-type');
             
-            if (encryptedArray.length < 12) {
-                throw new Error(`Chunk ${i} is too small (${encryptedArray.length} bytes), expected at least 12 (nonce)`);
+            if (contentType && contentType.includes('application/json')) {
+                // Large file - needs chunked download
+                const metadata = await checkRes.json();
+                console.log(`[DOWNLOAD] Chunk ${i+1} needs chunked download:`, metadata);
+                
+                const subChunks = [];
+                const totalSubChunks = metadata.totalChunks;
+                
+                for (let j = 0; j < totalSubChunks; j++) {
+                    const subPct = Math.round(((i + (j+1)/totalSubChunks)/totalChunks)*100);
+                    document.getElementById('progressBar').style.width = subPct + "%";
+                    document.getElementById('progressText').innerText = `Downloading: ${subPct}% (chunk ${i+1}/${totalChunks}, part ${j+1}/${totalSubChunks})`;
+                    
+                    const startByte = j * metadata.maxChunkSize;
+                    const endByte = Math.min(startByte + metadata.maxChunkSize - 1, metadata.fileSize - 1);
+                    const rangeHeader = `bytes=${startByte}-${endByte}`;
+                    
+                    const subChunkRes = await fetch('/api/download', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            url: fileObj.meta.links[i],
+                            provider: fileObj.meta.provider,
+                            range: rangeHeader
+                        })
+                    });
+                    
+                    if (!subChunkRes.ok) {
+                        const errText = await subChunkRes.text();
+                        throw new Error(`Sub-chunk ${j+1} of chunk ${i+1} failed: ${errText}`);
+                    }
+                    
+                    const subChunkData = await subChunkRes.arrayBuffer();
+                    subChunks.push(new Uint8Array(subChunkData));
+                }
+                
+                // Combine all sub-chunks
+                const totalSize = subChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+                const combinedChunk = new Uint8Array(totalSize);
+                let offset = 0;
+                for (const chunk of subChunks) {
+                    combinedChunk.set(chunk, offset);
+                    offset += chunk.length;
+                }
+                
+                // Decrypt the combined chunk
+                if (combinedChunk.length < 12) {
+                    throw new Error(`Chunk ${i} is too small (${combinedChunk.length} bytes), expected at least 12 (nonce)`);
+                }
+                
+                const nonce = combinedChunk.slice(0, 12);
+                const ciphertext = combinedChunk.slice(12);
+                
+                const decryptedData = await window.crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: nonce },
+                    key,
+                    ciphertext
+                );
+                
+                decryptedChunks.push(decryptedData);
+                
+            } else {
+                // Small file - direct download
+                console.log(`[DOWNLOAD] Chunk ${i+1} is small, direct download`);
+                const encryptedData = await checkRes.arrayBuffer();
+                const encryptedArray = new Uint8Array(encryptedData);
+                
+                if (encryptedArray.length < 12) {
+                    throw new Error(`Chunk ${i} is too small (${encryptedArray.length} bytes), expected at least 12 (nonce)`);
+                }
+                
+                const nonce = encryptedArray.slice(0, 12);
+                const ciphertext = encryptedArray.slice(12);
+                
+                const decryptedData = await window.crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: nonce },
+                    key,
+                    ciphertext
+                );
+                
+                decryptedChunks.push(decryptedData);
             }
-            
-            const nonce = encryptedArray.slice(0, 12);
-            const ciphertext = encryptedArray.slice(12);
-            
-            const decryptedData = await window.crypto.subtle.decrypt(
-                { name: "AES-GCM", iv: nonce },
-                key,
-                ciphertext
-            );
-            
-            decryptedChunks.push(decryptedData);
         }
         
         const finalBlob = new Blob(decryptedChunks, { type: "application/octet-stream" });
@@ -857,6 +949,7 @@ async function downloadFile(id) {
     } catch(e) { 
         closeModal('progressModal'); 
         alert("Gagal dekripsi: " + e.message); 
+        console.error('[DOWNLOAD] Error:', e);
     }
 }
 
@@ -1107,3 +1200,57 @@ function navigateToFolder(folderId) {
     loadData(); // loadData() now handles breadcrumb update after data is loaded
     updatePageTitle();
 }
+// === MOBILE MENU FUNCTIONS ===
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('show');
+}
+
+function closeSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+}
+
+// Close sidebar when clicking nav items on mobile
+function switchView(filterType, element) {
+    // Close mobile sidebar when switching views
+    if (window.innerWidth <= 768) {
+        closeSidebar();
+    }
+    
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    if (element) element.classList.add('active');
+
+    currentFilter = filterType;
+    
+    if (filterType === 'dashboard' || filterType === 'recent' || filterType === 'video' || filterType === 'image' || filterType === 'audio' || filterType === 'other') {
+        currentFolder = null;
+    } else if (filterType !== currentFilter) {
+        currentFolder = null;
+    }
+    
+    if (filterType === 'dashboard') {
+        document.getElementById('pageTitle').innerText = 'Dashboard';
+        loadData().then(() => renderDashboard());
+    } else if (filterType === 'recent') {
+        document.getElementById('pageTitle').innerText = 'Recent Files';
+        loadData().then(() => renderRecentFiles());
+    } else {
+        const titles = { 'all': 'My Files', 'video': 'Videos', 'image': 'Images', 'audio': 'Audio', 'other': 'Other' };
+        document.getElementById('pageTitle').innerText = titles[filterType] || 'My Files';
+        loadData().then(() => renderGrid());
+    }
+}
+
+// Close sidebar on window resize
+window.addEventListener('resize', function() {
+    if (window.innerWidth > 768) {
+        closeSidebar();
+    }
+});

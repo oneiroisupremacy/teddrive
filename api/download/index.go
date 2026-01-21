@@ -6,14 +6,15 @@ import (
     "io"
     "net/http"
     "os"
+    "strconv"
     "time"
 )
 
 // Download request hanya butuh URL & Provider
-// Key tidak perlu dikirim ke server untuk keamanan
 type DownloadRequest struct {
     URL      string `json:"url"`
     Provider string `json:"provider"`
+    Range    string `json:"range,omitempty"` // For chunked downloads
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
@@ -38,9 +39,8 @@ func Handler(w http.ResponseWriter, r *http.Request) {
     }
 
     var targetURL string
-    var err error
 
-    // --- TELEGRAM: Cari Path dulu ---
+    // --- TELEGRAM: Get file path first ---
     if req.Provider == "telegram" {
         token := os.Getenv("TELEGRAM_BOT_TOKEN")
         if token == "" {
@@ -51,7 +51,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
         apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/getFile?file_id=%s", token, req.URL)
         resp, err := http.Get(apiURL)
         if err != nil {
-            fmt.Println("[PROXY TG] GetFile Error:", err)
+            fmt.Println("[DOWNLOAD TG] GetFile Error:", err)
             http.Error(w, "Telegram GetFile Error", http.StatusInternalServerError)
             return
         }
@@ -61,7 +61,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
         json.NewDecoder(resp.Body).Decode(&tgResp)
 
         if ok, exists := tgResp["ok"].(bool); !exists || !ok {
-            fmt.Println("[PROXY TG] API Error:", tgResp["description"])
+            fmt.Println("[DOWNLOAD TG] API Error:", tgResp["description"])
             http.Error(w, "Telegram API Error", http.StatusInternalServerError)
             return
         }
@@ -71,48 +71,77 @@ func Handler(w http.ResponseWriter, r *http.Request) {
         targetURL = fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", token, filePath)
 
     } else {
-        // DISCORD: Langsung ambil URL
+        // DISCORD: Use direct URL
         targetURL = req.URL
     }
 
-    // --- FETCH (Proxy) ---
-    fmt.Printf("[PROXY] Fetching: %s\n", targetURL)
-    client := &http.Client{Timeout: 60 * time.Second}
+    // Create HTTP request
+    fmt.Printf("[DOWNLOAD] Fetching from: %s\n", targetURL)
+    client := &http.Client{Timeout: 120 * time.Second}
     httpReq, _ := http.NewRequest("GET", targetURL, nil)
     httpReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
     httpReq.Header.Set("Accept", "*/*")
-    httpReq.Header.Set("Accept-Encoding", "gzip, deflate")
+
+    // Add range header if specified (for chunked downloads)
+    if req.Range != "" {
+        httpReq.Header.Set("Range", req.Range)
+        fmt.Printf("[DOWNLOAD] Using range: %s\n", req.Range)
+    }
 
     resp, err := client.Do(httpReq)
     if err != nil {
-        fmt.Println("[PROXY] Connection Error:", err)
+        fmt.Println("[DOWNLOAD] Connection Error:", err)
         http.Error(w, "Connection Failed", http.StatusInternalServerError)
         return
     }
     defer resp.Body.Close()
 
-    if resp.StatusCode != 200 {
-        fmt.Printf("[PROXY] Remote Status: %d, Content-Length: %d\n", resp.StatusCode, resp.ContentLength)
-        if resp.StatusCode == 415 {
-            fmt.Println("[PROXY] 415 Error - Discord may have deleted or expired the file. Try using regular URL instead of proxy_url")
-        }
-        http.Error(w, fmt.Sprintf("Remote server error: %d", resp.StatusCode), http.StatusInternalServerError)
+    if resp.StatusCode != 200 && resp.StatusCode != 206 {
+        fmt.Printf("[DOWNLOAD] Remote Status: %d\n", resp.StatusCode)
+        http.Error(w, fmt.Sprintf("Remote server error: %d", resp.StatusCode), resp.StatusCode)
         return
     }
 
-    // Stream encrypted bytes ke frontend untuk dekripsi client-side
+    // Get content length
+    contentLength := resp.Header.Get("Content-Length")
+    fileSize, _ := strconv.ParseInt(contentLength, 10, 64)
+    
+    // Vercel limit is 4.5MB, use 4MB to be safe
+    const MAX_SIZE = 4 * 1024 * 1024 // 4MB
+    
+    // If file is too large and no range specified, return metadata for chunked download
+    if fileSize > MAX_SIZE && req.Range == "" {
+        fmt.Printf("[DOWNLOAD] File too large (%d bytes), returning chunked metadata\n", fileSize)
+        
+        response := map[string]interface{}{
+            "chunked": true,
+            "fileSize": fileSize,
+            "maxChunkSize": MAX_SIZE,
+            "totalChunks": (fileSize + MAX_SIZE - 1) / MAX_SIZE,
+        }
+        
+        w.Header().Set("Content-Type", "application/json")
+        w.Header().Set("Access-Control-Allow-Origin", "*")
+        w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+        w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+        
+        json.NewEncoder(w).Encode(response)
+        return
+    }
+
+    // Stream the file (either small file or chunk)
+    fmt.Printf("[DOWNLOAD] Streaming %d bytes\n", fileSize)
+    
     w.Header().Set("Content-Type", "application/octet-stream")
     w.Header().Set("Access-Control-Allow-Origin", "*")
     w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
     w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
     
-    bytesWritten, err := io.Copy(w, resp.Body)
-    if err != nil {
-        fmt.Println("[PROXY] Stream Error:", err)
+    // Stream with size limit to prevent payload errors
+    bytesWritten, err := io.CopyN(w, resp.Body, MAX_SIZE)
+    if err != nil && err != io.EOF {
+        fmt.Println("[DOWNLOAD] Stream Error:", err)
     } else {
-        fmt.Printf("[PROXY] Stream Success. Bytes written: %d\n", bytesWritten)
-        if bytesWritten == 0 {
-            fmt.Printf("[PROXY] WARNING: 0 bytes streamed from URL: %s\n", targetURL)
-        }
+        fmt.Printf("[DOWNLOAD] Stream Success. Bytes written: %d\n", bytesWritten)
     }
 }
