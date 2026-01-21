@@ -132,7 +132,9 @@ func Handler(w http.ResponseWriter, r *http.Request) {
     link, err := uploadToDiscord(fileName, encryptedData, token, channelID)
     if err != nil {
         fmt.Printf("[ERROR] Upload failed: %v\n", err)
-        http.Error(w, fmt.Sprintf("Upload failed: %v", err), http.StatusInternalServerError)
+        // Return more detailed error to frontend
+        errorMsg := fmt.Sprintf("Discord upload failed: %v", err)
+        http.Error(w, errorMsg, http.StatusInternalServerError)
         return
     }
 
@@ -182,6 +184,7 @@ func uploadToDiscord(fileName string, data []byte, token, channelID string) (str
 
     if resp.StatusCode != 200 {
         respBody, _ := io.ReadAll(resp.Body)
+        fmt.Printf("[DISCORD] API Error %d: %s\n", resp.StatusCode, string(respBody))
         return "", fmt.Errorf("Discord API error %d: %s", resp.StatusCode, string(respBody))
     }
 

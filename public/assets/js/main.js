@@ -136,9 +136,6 @@ GRANT ALL ON public.folders TO anon, authenticated;`);
         useDatabase = false;
     }
 }
-        useDatabase = false;
-    }
-}
 
 // === DATA LOADING ===
 async function loadData() {
@@ -688,6 +685,13 @@ async function startRealUpload() {
     const provider = document.getElementById('provider').value;
     if(!selectedFile) return alert("Pilih file!");
 
+    // Check file size limits
+    const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB limit
+    if (selectedFile.size > MAX_FILE_SIZE) {
+        alert(`File terlalu besar! Maximum ${formatSize(MAX_FILE_SIZE)} per file.`);
+        return;
+    }
+
     closeModal('uploadModal');
     document.getElementById('progressModal').style.display = 'flex';
     document.getElementById('progressTitle').innerText = "Uploading...";
@@ -703,6 +707,9 @@ async function startRealUpload() {
     const total = Math.ceil(selectedFile.size / CHUNK);
     const links = [];
 
+    console.log(`[UPLOAD] Starting upload: ${selectedFile.name} (${formatSize(selectedFile.size)}) via ${provider}`);
+    console.log(`[UPLOAD] Chunk size: ${formatSize(CHUNK)}, Total chunks: ${total}`);
+
     try {
         for (let i = 0; i < total; i++) {
             const start = i * CHUNK;
@@ -712,6 +719,8 @@ async function startRealUpload() {
             const pct = Math.round((end / selectedFile.size) * 100);
             document.getElementById('progressBar').style.width = pct + "%";
             document.getElementById('progressText').innerText = `Uploading: ${pct}% (${i+1}/${total})`;
+
+            console.log(`[UPLOAD] Chunk ${i+1}/${total}: ${formatSize(chunk.size)}`);
 
             const formData = new FormData();
             formData.append('chunkData', chunk);
@@ -728,11 +737,14 @@ async function startRealUpload() {
             
             if(!res.ok) {
                 const errText = await res.text();
+                console.error(`[UPLOAD] Chunk ${i+1} failed:`, errText);
                 throw new Error(`Chunk ${i+1} failed: ${errText}`);
             }
             
             const data = await res.json();
             links.push(data.link);
+            
+            console.log(`[UPLOAD] Chunk ${i+1} uploaded successfully`);
             
             if (i < total - 1) {
                 await new Promise(resolve => setTimeout(resolve, 100));

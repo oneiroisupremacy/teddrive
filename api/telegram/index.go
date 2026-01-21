@@ -132,7 +132,9 @@ func Handler(w http.ResponseWriter, r *http.Request) {
     link, err := uploadToTelegram(fileName, encryptedData, token, chatID)
     if err != nil {
         fmt.Printf("[ERROR] Upload failed: %v\n", err)
-        http.Error(w, fmt.Sprintf("Upload failed: %v", err), http.StatusInternalServerError)
+        // Return more detailed error to frontend
+        errorMsg := fmt.Sprintf("Telegram upload failed: %v", err)
+        http.Error(w, errorMsg, http.StatusInternalServerError)
         return
     }
 
@@ -184,6 +186,7 @@ func uploadToTelegram(fileName string, data []byte, token, chatID string) (strin
 
     if resp.StatusCode != 200 {
         respBody, _ := io.ReadAll(resp.Body)
+        fmt.Printf("[TELEGRAM] API Error %d: %s\n", resp.StatusCode, string(respBody))
         return "", fmt.Errorf("Telegram API error %d: %s", resp.StatusCode, string(respBody))
     }
 
